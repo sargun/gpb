@@ -527,6 +527,20 @@ proto3_no_occurrence_test() ->
        #?gpb_field{name=f2,fnum=2,occurrence=repeated}]}] =
         do_process_sort_defs(Defs).
 
+proto3_sub_msgs_gets_occurrence_optional_test() ->
+    {ok,Defs} = parse_lines(["syntax=\"proto3\";",
+                             "message m1 {",
+                             "  s1 f1=1;",
+                             "}",
+                             "message s1 { uint32 f1=1; }"]),
+    [{proto3_msgs,[m1,s1]},
+     {syntax,"proto3"},
+     {{msg,m1},
+      [#?gpb_field{name=f1,fnum=1,type={msg,s1},occurrence=optional}]},
+     {{msg,s1},
+      [#?gpb_field{name=f1,fnum=1,type=uint32,occurrence=required}]}] =
+        do_process_sort_defs(Defs).
+
 proto3_no_repeated_are_packed_by_default_test() ->
     {ok,Defs} = parse_lines(["syntax=\"proto3\";",
                              "message m1 {",

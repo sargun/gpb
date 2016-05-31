@@ -684,8 +684,35 @@ handle_proto_syntax_version_all_files(Defs) ->
        P3Items /= [] ->
             Proto3Msgs = lists:append([Msgs || {proto3_msgs,Msgs} <- P3Items]),
             Defs1 = Defs -- P3Items,
-            Defs1 ++ [{proto3_msgs, Proto3Msgs}]
+            Defs2 = Defs1 ++ [{proto3_msgs, Proto3Msgs}],
+            %% The language guide says "For message fields, the
+            %% default value is null.", so making them optional ---
+            %% %% rather than default --- makes more sense.
+            make_proto3_submsg_fields_optional(Defs2, Proto3Msgs)
     end.
+
+make_proto3_submsg_fields_optional([Def | Rest], P3Msgs) ->
+    case Def of
+        {{msg,MsgName}, Fields} ->
+            case lists:member(MsgName, P3Msgs) of
+                true ->
+                    Fields1 =
+                        lists:map(fun(#?gpb_field{type={msg,_}}=F) ->
+                                          F#?gpb_field{occurrence=optional};
+                                     (OtherField) ->
+                                          OtherField
+                                  end,
+                                  Fields),
+                    Def1 = {{msg,MsgName}, Fields1},
+                    [Def1 | make_proto3_submsg_fields_optional(Rest, P3Msgs)];
+                false ->
+                    [Def | make_proto3_submsg_fields_optional(Rest, P3Msgs)]
+            end;
+        _ ->
+            [Def | make_proto3_submsg_fields_optional(Rest, P3Msgs)]
+    end;
+make_proto3_submsg_fields_optional([], _P3Msgs) ->
+    [].
 
 
 %% Find inconsistencies
