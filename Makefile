@@ -112,10 +112,13 @@ endif
 endif
 
 
+# Sorting it also eliminates duplicates
+# (eg: gpb_parse due to both .yrl and .erl on rebuild, ditto for gpb_scan)
 MODULES := \
-	$(patsubst $(src)/%.erl,%,$(wildcard $(src)/*.erl)) \
-	$(patsubst $(src)/%.yrl,%,$(wildcard $(src)/*.yrl)) \
-	$(patsubst $(src)/%.xrl,%,$(wildcard $(src)/*.xrl))
+	$(sort \
+	  $(patsubst $(src)/%.erl,%,$(wildcard $(src)/*.erl)) \
+	  $(patsubst $(src)/%.yrl,%,$(wildcard $(src)/*.yrl)) \
+	  $(patsubst $(src)/%.xrl,%,$(wildcard $(src)/*.xrl)))
 
 DESCR_PROTO := $(descr_src)/gpb_descriptor.proto
 
@@ -125,6 +128,14 @@ DESCR_MODULES := \
 
 TEST_MODULES := \
 	$(patsubst $(test)/%.erl,%,$(wildcard $(test)/*.erl))
+
+# Run eunit on these modules:
+# - If module M and M_tests exist, only include M (M_tests is then implicit)
+# - If M_tests exists, but no M, include M_tests (eg gpb_compile_maps_tests)
+# sorting it also removes duplicates (gpb_parse)
+EUNIT_MODULES := \
+	$(MODULES) \
+	$(filter-out $(patsubst %,%_tests,$(MODULES)),$(TEST_MODULES))
 
 
 BEAMS       := $(patsubst %,$(ebin)/%.beam,$(MODULES))
@@ -153,7 +164,7 @@ clean:
 test:	all $(TEST_BEAMS) FORCE
 	@echo Testing...
 	$(silencer)$(ERL) $(ERL_BATCH_FLAGS) -pa $(test) -pa $(ebin) -eval " \
-	    case eunit:test([$(subst $(space),$(comma),$(TEST_MODULES))], \
+	    case eunit:test([$(subst $(space),$(comma),$(EUNIT_MODULES))], \
 			    [$(verbose_opt)]) of \
 		ok -> halt(0); \
 		_  -> halt(1) \
@@ -211,6 +222,11 @@ $(test)/gpb_codegen_tests.beam: $(ebin)/gpb_codegen.beam
 
 # To compile gpb.erl, we need gpb_include.hrl
 $(ebin)/gpb.beam: $(src)/gpb.erl $(incdir)/gpb_version.hrl
+
+# gpb_compile_tests.erl includes gpb_tests.erl (see the files for details
+# on this unorthodox setup), this dependency needs to be recorded
+$(test)/gpb_compile_tests.beam: $(test)/gpb_compile_tests.erl \
+				$(test)/gpb_tests.erl
 
 # To compile the description generator, we
 # must first have compiled the proto file for the gpb_description.proto

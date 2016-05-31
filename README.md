@@ -22,7 +22,7 @@ Features of gpb
    - the 'allow_alias' enum option (treated as if it is always set true)
    - generating metadata information
    - package namespacing (optional)
-   - oneof
+   - oneof (introduced in protobuf 2.6.0)
    - map<_,_> (introduced in protobuf 3.0.0)
 
    gpb reads but ignores or throws away:
@@ -117,18 +117,18 @@ Performance
 -----------
 
 Here is a comparison between gpb (interpreted by the erlang vm) and
-the C++, Python and Java serializers/deserializers of protobuf-2.4.1
+the C++, Python and Java serializers/deserializers of protobuf-2.6.1rc1
 
     [MB/s]        | gpb   |pb/c++ |pb/c++ | pb/c++ | pb/py |pb/java| pb/java|
                   |       |(speed)|(size) | (lite) |       |(size) | (speed)|
     --------------+-------+-------+-------+--------+-------+-------+--------+
     small msgs    |       |       |       |        |       |       |        |
-      serialize   | 44.32 | 863.4 | 54.67 |  510.8 |  6.77 | 60.28 |  907.9 |
-      deserialize | 59.62 | 534.1 | 52.89 |  532.5 |  5.75 | 81.36 |  337.2 |
+      serialize   |   52  | 1240  |   85  |   750  |  6.5  |   68  |  1290  |
+      deserialize |   69  |  880  |   85  |   950  |  5.5  |   90  |   450  |
     --------------+-------+-------+-------+--------+-------+-------+--------+
     large msgs    |       |       |       |        |       |       |        |
-      serialize   | 28.76 | 667.9 | 45.71 |  396.5 |  4.71 | 58.28 |  562.9 |
-      deserialize | 37.01 | 396.3 | 44.84 |  276.3 |  4.07 | 55.33 |  356.8 |
+      serialize   |   36  |  950  |   72  |   670  |  4.5  |   55  |   670  |
+      deserialize |   45  |  620  |   71  |   480  |  4.0  |   60  |   360  |
     --------------+-------+-------+-------+--------+-------+-------+--------+
 
 The performances are measured as number of processed MB/s,
@@ -140,8 +140,8 @@ bytes, respectively, in serialized form)
 The Java benchmark is run with optimization both for code size and for
 speed. The Python implementation cannot optimize for speed.
 
-    SW: Python 2.7.9, Java 1.7.0_75 (OpenJDK), Erlang/OTP 17.3, g++ 4.9.2
-        Linux kernel 3.16, Debian (in 32 bit mode), protobuf-2.6.1,
+    SW: Python 2.7.11, Java 1.8.0_77 (Oracle JDK), Erlang/OTP 18.3, g++ 5.3.1
+        Linux kernel 4.4, Debian (in 64 bit mode), protobuf-2.6.1rc1
     HW: Intel Core i7 5820k, 3.3GHz, 6x256 kB L2 cache, 15MB L3 cache
         (CPU frequency pinned to 3.3 GHz)
 
@@ -183,8 +183,11 @@ Mapping of protocol buffer datatypes to erlang
     enum                  atom
     ----------------------------------------------------------------
     message               record (thus tuple)
+                          or maps, if the maps (-maps) option is specified
     ----------------------------------------------------------------
     string                unicode string, thus list of integers
+                          or binaries, if the strings_as_binaries (-strbin)
+                          option is specified
     ----------------------------------------------------------------
     bytes                 binary
     ----------------------------------------------------------------
@@ -196,6 +199,16 @@ Mapping of protocol buffer datatypes to erlang
 
 Interaction with rebar
 ----------------------
+
+For info on how to use gpb with rebar3, see
+https://www.rebar3.org/docs/using-available-plugins#section-using-gpb
+
+In rebar there is support for gpb since version 2.6.0. See the
+proto compiler section of rebar.sample.config file at
+https://github.com/rebar/rebar/blob/master/rebar.config.sample
+
+For older versions of rebar---prior to 2.6.0---the text below outlines
+how to proceed:
 
 Place the .proto files for instance in a `proto/` subdirectory.
 Any subdirectory, other than src/, is fine, since rebar will try to
@@ -230,7 +243,7 @@ matching N.M where N and M are integers.  This version is
 inserted into the gpb.app file as well as into the
 include/gpb_version.hrl.  The version is the result of the command
 
-  git describe --always --tags --match '[0-9]*.[0-9]*'
+    git describe --always --tags --match '[0-9]*.[0-9]*'
 
 Thus, to create a new version of gpb, the single source from where
 this version is fetched, is the git tag.   (If you are importing
@@ -238,13 +251,14 @@ gpb into another version control system than git, or using another
 build tool than rebar, you might have to adapt rebar.config and
 src/gpb.app.src accordingly.)
 
-The version number of the gpb on github is intended to always be only
-integers with dots, in order to be compatible with reltool.  In other
-words, each push to github is considered a release, and the version
-number is bumped.  To ensure this, there is a `pre-push` git hook and
-two scripts, `install-git-hooks` and `tag-next-minor-vsn`, in the
-helpers subdirectory. The ChangeLog file will not necessarily reflect
-all minor version bumps, only important updates.
+The version number on the master branch of the gpb on github is
+intended to always be only integers with dots, in order to be
+compatible with reltool.  In other words, each push to github is
+considered a release, and the version number is bumped.  To ensure
+this, there is a `pre-push` git hook and two scripts,
+`install-git-hooks` and `tag-next-minor-vsn`, in the helpers
+subdirectory. The ChangeLog file will not necessarily reflect all
+minor version bumps, only important updates.
 
 Places to update when making a new version:
 * Write about the changes in the ChangeLog file,

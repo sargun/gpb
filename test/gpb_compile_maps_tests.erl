@@ -125,6 +125,12 @@ decode_merge_submsg_with_omitted_test() ->
     #{c := {a, #{f := [395]}}} = M:decode_msg(<<B1/binary, B2/binary>>, t1),
     unload_code(M).
 
+maps_with_defaults_test() ->
+    M = compile_iolist(["message t1 { optional uint32 f = 2 [default=2];};"],
+                       [maps, type_specs, {maps_unset_optional, omitted}]),
+    ?assertEqual(#{}, M:decode_msg(<<>>, t1)),
+    unload_code(M).
+
 -define(matches_either_or(ExpectedAlt1, ExpectedAlt2, Expr),
         begin
             Actual = Expr,
