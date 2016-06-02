@@ -712,7 +712,7 @@ handle_proto_syntax_version_all_files(Defs) ->
        P3Items /= [] ->
             Proto3Msgs = lists:append([Msgs || {proto3_msgs,Msgs} <- P3Items]),
             Defs1 = Defs -- P3Items,
-            Defs2 = Defs1 ++ [{proto3_msgs, Proto3Msgs}],
+            Defs2 = Defs1 ++ [{proto3_msgs, lists:sort(Proto3Msgs)}],
             %% The language guide says "For message fields, the
             %% default value is null.", so making them optional ---
             %% %% rather than default --- makes more sense.
