@@ -4732,6 +4732,7 @@ format_nif_cc(Mod, Defs, AnRes, Opts) ->
       [format_nif_cc_includes(Mod, Defs, Opts),
        format_nif_cc_oneof_version_check_if_present(Defs),
        format_nif_cc_maptype_version_check_if_present(Defs),
+       format_nif_cc_proto3_version_check_if_present(Defs),
        format_nif_cc_map_api_check_if_needed(Opts),
        format_nif_cc_local_function_decls(Mod, Defs, Opts),
        format_nif_cc_mk_atoms(Mod, Defs, AnRes, Opts),
@@ -4814,6 +4815,20 @@ contains_maptype_field([]) ->
 
 is_maptype_field(#?gpb_field{type={map,_,_}}) -> true;
 is_maptype_field(_) -> false.
+
+format_nif_cc_proto3_version_check_if_present(Defs) ->
+    case proplists:get_value(syntax, Defs) of
+        "proto3" ->
+            ["#if GOOGLE_PROTOBUF_VERSION < 3000000\n"
+             "#error \"The proto definitions use 'proto3' syntax.\"\n"
+             "#error \"This feature appeared in protobuf 3, but\"\n"
+             "#error \"it appears your protobuf is older.  Please\"\n"
+             "#error \"update protobuf.\"\n"
+             "#endif\n"
+             "\n"];
+        _ ->
+            ""
+    end.
 
 format_nif_cc_map_api_check_if_needed(Opts) ->
     case get_records_or_maps_by_opts(Opts) of
@@ -5709,6 +5724,7 @@ format_nif_cc_unpacker(CPkg, MsgName, Fields, Defs, Opts) ->
     UnpackFnName = mk_c_fn(u_msg_, MsgName),
     CMsgType = CPkg ++ "::" ++ dot_replace_s(MsgName, "::"),
     Is = [I || {I,_} <- index_seq(Fields)],
+    IsProto3 = gpb:is_msg_proto3(MsgName, Defs),
     ["static ERL_NIF_TERM\n",
      UnpackFnName,"(ErlNifEnv *env, const ",CMsgType," *m)\n",
      "{\n",
@@ -5719,7 +5735,8 @@ format_nif_cc_unpacker(CPkg, MsgName, Fields, Defs, Opts) ->
      "\n",
      [begin
           DestVar = ?f("elem~w",[I]),
-          format_nif_cc_field_unpacker(DestVar, "m", MsgName, Field, Defs, Opts)
+          format_nif_cc_field_unpacker(DestVar, "m", MsgName, Field,
+                                       Defs, Opts, IsProto3)
       end
       || {I, Field} <- index_seq(Fields)],
      "\n",
@@ -5756,13 +5773,15 @@ format_nif_cc_unpacker(CPkg, MsgName, Fields, Defs, Opts) ->
      "\n"].
 
 format_nif_cc_field_unpacker(DestVar, MsgVar, _MsgName, #?gpb_field{}=Field,
-                             Defs, Opts) ->
+                             Defs, Opts, IsProto3) ->
     #?gpb_field{occurrence=Occurrence, type=Type}=Field,
     case Occurrence of
         required ->
-            format_nif_cc_field_unpacker_single(DestVar, MsgVar, Field, Defs);
+            format_nif_cc_field_unpacker_single(DestVar, MsgVar, Field, Defs,
+                                                IsProto3);
         optional ->
-            format_nif_cc_field_unpacker_single(DestVar, MsgVar, Field, Defs);
+            format_nif_cc_field_unpacker_single(DestVar, MsgVar, Field, Defs,
+                                                IsProto3);
         repeated ->
             case Type of
                 {map,_,_} ->
@@ -5774,7 +5793,7 @@ format_nif_cc_field_unpacker(DestVar, MsgVar, _MsgName, #?gpb_field{}=Field,
             end
     end;
 format_nif_cc_field_unpacker(DestVar, MsgVar, MsgName, #gpb_oneof{}=Field,
-                             Defs, _Opts) ->
+                             Defs, _Opts, _IsProto3) ->
     #gpb_oneof{name=OFName, fields=OFields} = Field,
     CPkg = get_cc_pkg(Defs),
     CMsgType = CPkg ++ "::" ++ dot_replace_s(MsgName, "::"),
@@ -5810,7 +5829,21 @@ format_nif_cc_field_unpacker(DestVar, MsgVar, MsgName, #gpb_oneof{}=Field,
         ?f("}\n")]),
      "\n"].
 
-format_nif_cc_field_unpacker_single(DestVar, MsgVar, Field, Defs) ->
+format_nif_cc_field_unpacker_single(DestVar, MsgVar, Field, Defs, IsProto3) ->
+    if IsProto3 ->
+            format_nif_cc_field_unpacker_single_p3(
+              DestVar, MsgVar, Field, Defs);
+       not IsProto3 ->
+            format_nif_cc_field_unpacker_single_p2(
+              DestVar, MsgVar, Field, Defs)
+    end.
+
+format_nif_cc_field_unpacker_single_p3(DestVar, MsgVar, Field, Defs) ->
+    [indent_lines(
+       4, format_nif_cc_field_unpacker_by_field(DestVar, MsgVar, Field, Defs)),
+     "\n"].
+
+format_nif_cc_field_unpacker_single_p2(DestVar, MsgVar, Field, Defs) ->
     #?gpb_field{name=FName} = Field,
     LCFName = to_lower(FName),
     [?f("    if (!~s->has_~s())\n", [MsgVar, LCFName]),
