@@ -725,12 +725,16 @@ make_proto3_submsg_fields_optional([Def | Rest], P3Msgs) ->
             case lists:member(MsgName, P3Msgs) of
                 true ->
                     Fields1 =
-                        lists:map(fun(#?gpb_field{type={msg,_}}=F) ->
-                                          F#?gpb_field{occurrence=optional};
-                                     (OtherField) ->
-                                          OtherField
-                                  end,
-                                  Fields),
+                        lists:map(
+                          fun(#?gpb_field{type={msg,_}, occurrence=Occ}=F) ->
+                                  case Occ of
+                                      repeated -> F; % don't change repeated
+                                      _ -> F#?gpb_field{occurrence=optional}
+                                  end;
+                             (OtherField) ->
+                                  OtherField
+                          end,
+                          Fields),
                     Def1 = {{msg,MsgName}, Fields1},
                     [Def1 | make_proto3_submsg_fields_optional(Rest, P3Msgs)];
                 false ->
